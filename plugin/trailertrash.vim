@@ -6,6 +6,12 @@
 " http://vimcasts.org/episodes/tidying-whitespace/
 " http://blog.kamil.dworakowski.name/2009/09/unobtrusive-highlighting-of-trailing.html
 " and more!
+"
+" Options for extra whitespace checks can be enabled by adding these two lines
+" to your .vimrc file:
+"
+" let g:trailertrash_embedded_tabs = 1
+" let g:trailertrash_leading_spaces = 1
 
 " Exit quickly when:
 " - this plugin was already loaded (or disabled)
@@ -14,6 +20,10 @@ if exists("g:loaded_trailertrash") || &cp
   finish
 endif
 let g:loaded_trailertrash = 1
+
+" Add some extra optional behaviours
+let s:trailertrash_embedded_tabs   = exists('g:trailertrash_embedded_tabs') && g:trailertrash_embedded_tabs
+let s:trailertrash_leading_spaces  = exists('g:trailertrash_leading_spaces') && g:trailertrash_leading_spaces
 
 let s:cpo_save = &cpo
 set cpo&vim
@@ -25,14 +35,31 @@ function! KillTrailerTrash()
     let _s=@/
     let l = line(".")
     let c = col(".")
+    let expandtab = &expandtab
     " Do the business:
-    %s/\s\+$//e
+
+    " Remove trailing spaces
+    execute (a:firstline) . "," . a:lastline . 's/\s\+$//e '
+
+    if s:trailertrash_embedded_tabs
+	" remove embedded tabs
+	set expandtab
+	execute (a:firstline) . "," . a:lastline . 'retab ' . &tabstop
+	set noexpandtab
+    endif
+
+    if s:trailertrash_leading_spaces
+	" fix up indenting
+	execute (a:firstline) . "," . a:lastline . 'normal =='
+    endif
+
     " Clean up: restore previous search history, and cursor position
+    let &expandtab = expandtab
     let @/=_s
     call cursor(l, c)
 endfunction
 
-command! -bar -range=% Trim :call KillTrailerTrash()
+command! -bar -range=% Trim :<line1>,<line2>call KillTrailerTrash()
 "nmap <silent> <Leader>sa :call KillTrailerTrash()<CR>
 
 " User can override blacklist. This match as regexp pattern.
@@ -72,10 +99,31 @@ command Trailer :call ShowTrailerTrash()
 call ShowTrailerTrash()
 "nmap <silent> <Leader>s :call ShowTrailerTrash()<CR>
 
-" Matches
-au BufEnter    * call s:TrailerMatch('/\s\+$/')
-au InsertEnter * call s:TrailerMatch('/\s\+\%#\@<!$/')
-au InsertLeave * call s:TrailerMatch('/\s\+$/')
+" various bits of regexes:
+let s:REGEX_TRAILING_WHITESPACE        = '\s\+$'
+let s:REGEX_TRAILING_WHITESPACE_INSERT = '\s\+\%#\@<!$'
+let s:REGEX_EMBEDDED_TABS              = '[^\t]\zs\t\+\ze'
+let s:REGEX_LEADING_SPACE              = '^ \+'
+
+let s:search_patterns_normal = [ s:REGEX_TRAILING_WHITESPACE ]
+let s:search_patterns_insert = [ s:REGEX_TRAILING_WHITESPACE_INSERT ]
+
+if s:trailertrash_embedded_tabs
+    let s:search_patterns_normal += [ s:REGEX_EMBEDDED_TABS ]
+    let s:search_patterns_insert += [ s:REGEX_EMBEDDED_TABS ]
+endif
+
+if s:trailertrash_leading_spaces
+    let s:search_patterns_normal += [ s:REGEX_LEADING_SPACE ]
+    let s:search_patterns_insert += [ s:REGEX_LEADING_SPACE ]
+endif
+
+let s:regex_normal = '/\(' . join (s:search_patterns_normal, '\|') . '\)/'
+let s:regex_insert = '/\(' . join (s:search_patterns_insert, '\|') . '\)/'
+
+au BufEnter    * call s:TrailerMatch(s:regex_normal)
+au InsertEnter * call s:TrailerMatch(s:regex_insert)
+au InsertLeave * call s:TrailerMatch(s:regex_normal)
 
 " }}}1
 
