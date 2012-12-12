@@ -125,6 +125,8 @@ au BufEnter    * call s:TrailerMatch(s:regex_normal)
 au InsertEnter * call s:TrailerMatch(s:regex_insert)
 au InsertLeave * call s:TrailerMatch(s:regex_normal)
 
+noremap <Plug>Trim :call KillTrailerTrash()<CR>
+
 " }}}1
 
 let &cpo = s:cpo_save
